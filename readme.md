@@ -1,6 +1,6 @@
 # Evil Bot
 
-A dark and mysterious Discord Chatbot Powered by Ollama that is tasked with spreading mischief.
+A dark and mysterious Discord chatbot tasked with spreading mischief powered by Ollama.
 
 ## Prerequisites
 
