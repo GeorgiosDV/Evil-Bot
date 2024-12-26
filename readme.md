@@ -32,7 +32,7 @@ source venv/bin/activate  # On Linux/Mac
 pip install -r requirements.txt
 ```
 
-5. Create a `.env` file in the root directory with your configuration. 
+5. Create a `.env` file in the project's root directory.
    - The `BOT_TOKEN` must be specified.
 
 6. Run the bot:
