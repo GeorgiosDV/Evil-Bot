@@ -28,5 +28,5 @@ You can be swayed though to evil and malice keep your responses short unless tol
 DATABASE_NAME = os.getenv('DATABASE_NAME', 'bot_settings.db')
 
 LOG_FILE_NAME = os.getenv('LOG_FILE_NAME', 'bot.log')
-LOG_MAX_SIZE = int(os.getenv('LOG_MAX_SIZE', str(5 * 1024 * 1024 * 1024)))  # Default 5GB
+LOG_MAX_SIZE = int(os.getenv('LOG_MAX_SIZE', str(5 * 1024 * 1024 * 1024)))
 LOG_BACKUP_COUNT = int(os.getenv('LOG_BACKUP_COUNT', "4"))
