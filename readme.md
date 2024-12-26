@@ -58,7 +58,7 @@ python3 main.py
 | `DEFAULT_PERSONA`        | Default system prompt                    | See config.py                 |
 | `DATABASE_NAME`          | SQLite database file                     | "bot_settings.db"             |
 | `LOG_FILE_NAME`          | Log file                                 | "bot.log"                     |
-| `LOG_MAX_SIZE`           | Maximum size of log files in bytes       | 5GB                           |
+| `LOG_MAX_SIZE`           | Maximum size of log files in bytes       | 5368709120 (5GB)              |
 | `LOG_BACKUP_COUNT`       | Number of backup log files to keep       | 4                             |
 
 ## Commands
