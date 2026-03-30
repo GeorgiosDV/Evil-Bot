@@ -57,30 +57,30 @@ def create_help_embed(command_name, description, examples=None, fields=None):
     return em
 
 # This function is just a bool that determines if the bot should respond or fuck off
-def should_respond(message):
+def should_respond(message, bot_user):
     if message.author.bot:
         logger.debug("Skipping bot message")
         return False
-        
+
     # The bot always responds to dms
     if isinstance(message.channel, discord.DMChannel):
         logger.debug("Message is in DM, should respond")
         return True
-        
+
     # get the server settings
     settings = database.get_server_settings(message.guild.id)
     if not settings:
         logger.warning(f"No settings found for server {message.guild.id}")
         return False
-        
+
     content_lower = message.content.lower()
-    
+
     # if any trigger words are in the message, then respond
     triggered = any([
-        message.mentions and any(user.bot for user in message.mentions),
+        bot_user in message.mentions,
         any(word in content_lower for word in settings['trigger_words']),
-        message.reference and message.reference.resolved and 
-        message.reference.resolved.author.bot
+        message.reference and message.reference.resolved and
+        message.reference.resolved.author == bot_user
     ])
 
     if triggered:
@@ -95,6 +95,21 @@ def should_respond(message):
         return chance
         
     return False
+
+def resolve_mentions(content, guild):
+    """Replace @name text in LLM output with real Discord mentions (<@id>)."""
+    if not guild:
+        return content
+    # Sort longest names first to avoid partial matches (e.g. "Jo" inside "John")
+    members = sorted(guild.members, key=lambda m: max(len(m.display_name), len(m.name)), reverse=True)
+    for member in members:
+        for name in [member.display_name, member.name]:
+            placeholder = f'@{name}'
+            if placeholder in content:
+                content = content.replace(placeholder, f'<@{member.id}>')
+                break
+    logger.debug(f"Resolved mentions in response")
+    return content
 
 async def split_and_send_message(message, content):
     logger.debug(f"Splitting message of length {len(content)}")
@@ -129,7 +144,7 @@ async def split_and_send_message(message, content):
 
 async def get_ollama_response(context, model_name):
     logger.debug(f"Getting Ollama response using model: {model_name}")
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         response = await asyncio.wait_for(
             loop.run_in_executor(
