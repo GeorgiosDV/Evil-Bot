@@ -54,6 +54,10 @@ class EvilBot(commands.Bot):
         logger.info(f"{config.BOT_NAME} has risen! Logged in as {self.user}")
         database.init_db()
 
+    async def on_guild_join(self, guild):
+        logger.info(f"Joined new guild: {guild.id} ({guild.name})")
+        database.get_server_settings(guild.id)
+
     def setup_commands(self):
         logger.info("Setting up bot commands")
         
@@ -360,13 +364,13 @@ class EvilBot(commands.Bot):
     async def on_message(self, message):
         logger.debug(f"Message received - Channel: {message.channel.id}, Author: {message.author.id}")
             
+        if message.author.bot:
+            logger.debug("Skipping bot message")
+            return
+
         if message.content.startswith(self.command_prefix):
             logger.info(f"Processing command: {message.content}")
             await self.process_commands(message)
-            return
-                
-        if message.author.bot:
-            logger.debug("Skipping bot message")
             return
                 
         should_respond = False
@@ -375,7 +379,7 @@ class EvilBot(commands.Bot):
             should_respond = True
         else:
             logger.debug("Checking if should respond to server message")
-            should_respond = utils.should_respond(message)
+            should_respond = utils.should_respond(message, self.user)
                 
         if not should_respond:
             logger.debug("Decided not to respond to message")
@@ -384,7 +388,8 @@ class EvilBot(commands.Bot):
         logger.info(f"Preparing response to message: {message.clean_content[:50]}...")
         async with message.channel.typing():
             try:
-                content = message.clean_content.replace(f'@{self.user.name}', '').strip()
+                bot_display_name = message.guild.me.display_name if message.guild else self.user.display_name
+                content = message.clean_content.replace(f'@{bot_display_name}', '').strip()
                 
                 if isinstance(message.channel, discord.DMChannel):
                     logger.debug(f"Getting DM prompt for user {message.author.id}")
@@ -404,16 +409,18 @@ class EvilBot(commands.Bot):
                     })
                 
                 logger.debug(f"Getting message history (max {config.MAX_CONTEXT_MESSAGES} messages)")
+                history = []
                 async for hist_msg in message.channel.history(
                     limit=config.MAX_CONTEXT_MESSAGES,
                     before=message
                 ):
                     if hist_msg.author.bot and hist_msg.author != self.user:
                         continue
-                    context.append({
+                    history.append({
                         'role': 'user' if hist_msg.author != self.user else 'assistant',
                         'content': hist_msg.clean_content
                     })
+                context.extend(reversed(history))
                 
                 context.append({'role': 'user', 'content': content})
 
@@ -423,6 +430,7 @@ class EvilBot(commands.Bot):
                     response_content = response['message']['content']
                     logger.info("Successfully got response from Ollama")
                     logger.debug(f"Response content: {response_content[:100]}...")
+                    response_content = utils.resolve_mentions(response_content, message.guild)
                     await utils.split_and_send_message(message, response_content)
                 except asyncio.TimeoutError:
                     logger.error("Ollama response timed out")
