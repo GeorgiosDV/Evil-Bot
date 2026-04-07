@@ -70,6 +70,7 @@ def set_server_prompt(server_id, prompt):
     if conn is not None:
         try:
             c = conn.cursor()
+            # Ensure the row exists before updating
             c.execute('''
                 INSERT OR IGNORE INTO server_settings (
                     server_id, system_prompt, trigger_words,
@@ -89,7 +90,7 @@ def set_server_prompt(server_id, prompt):
             ''', (prompt, server_id))
             conn.commit()
             logger.info("Server prompt updated successfully")
-            return c.rowcount > 0
+            return True
         except Error as e:
             logger.error(f"Error setting server prompt: {e}", exc_info=True)
             return False
@@ -103,8 +104,21 @@ def reset_server_settings(server_id):
     if conn is not None:
         try:
             c = conn.cursor()
+            # Ensure the row exists before updating
             c.execute('''
-                UPDATE server_settings 
+                INSERT OR IGNORE INTO server_settings (
+                    server_id, system_prompt, trigger_words,
+                    random_responses_enabled, random_response_chance
+                ) VALUES (?, ?, ?, ?, ?)
+            ''', (
+                server_id,
+                config.DEFAULT_PERSONA,
+                json.dumps(config.DEFAULT_TRIGGER_WORDS),
+                config.DEFAULT_RANDOM_ENABLED,
+                config.DEFAULT_RANDOM_CHANCE
+            ))
+            c.execute('''
+                UPDATE server_settings
                 SET system_prompt = ?,
                     trigger_words = ?,
                     random_responses_enabled = ?,
@@ -127,20 +141,6 @@ def reset_server_settings(server_id):
             conn.close()
     return False
 
-def _ensure_server_row(cursor, server_id):
-    cursor.execute('''
-        INSERT OR IGNORE INTO server_settings (
-            server_id, system_prompt, trigger_words,
-            random_responses_enabled, random_response_chance
-        ) VALUES (?, ?, ?, ?, ?)
-    ''', (
-        server_id,
-        config.DEFAULT_PERSONA,
-        json.dumps(config.DEFAULT_TRIGGER_WORDS),
-        config.DEFAULT_RANDOM_ENABLED,
-        config.DEFAULT_RANDOM_CHANCE
-    ))
-
 def set_trigger_words(server_id, words):
     logger.info(f"Setting trigger words for server_id: {server_id}")
     logger.debug(f"New trigger words: {words}")
@@ -148,7 +148,6 @@ def set_trigger_words(server_id, words):
     if conn is not None:
         try:
             c = conn.cursor()
-            _ensure_server_row(c, server_id)
             c.execute('''
                 UPDATE server_settings
                 SET trigger_words = ?
@@ -156,7 +155,7 @@ def set_trigger_words(server_id, words):
             ''', (json.dumps(words), server_id))
             conn.commit()
             logger.info("Trigger words updated successfully")
-            return c.rowcount > 0
+            return True
         except Error as e:
             logger.error(f"Error setting trigger words: {e}", exc_info=True)
             return False
@@ -170,7 +169,6 @@ def set_random_responses(server_id, enabled):
     if conn is not None:
         try:
             c = conn.cursor()
-            _ensure_server_row(c, server_id)
             c.execute('''
                 UPDATE server_settings
                 SET random_responses_enabled = ?
@@ -178,7 +176,7 @@ def set_random_responses(server_id, enabled):
             ''', (enabled, server_id))
             conn.commit()
             logger.info("Random responses setting updated successfully")
-            return c.rowcount > 0
+            return True
         except Error as e:
             logger.error(f"Error setting random responses: {e}", exc_info=True)
             return False
@@ -195,7 +193,6 @@ def set_random_chance(server_id, chance):
     if conn is not None:
         try:
             c = conn.cursor()
-            _ensure_server_row(c, server_id)
             c.execute('''
                 UPDATE server_settings
                 SET random_response_chance = ?
@@ -203,7 +200,7 @@ def set_random_chance(server_id, chance):
             ''', (chance, server_id))
             conn.commit()
             logger.info("Random chance updated successfully")
-            return c.rowcount > 0
+            return True
         except Error as e:
             logger.error(f"Error setting random chance: {e}", exc_info=True)
             return False
@@ -217,7 +214,7 @@ def init_db():
     if conn is not None:
         try:
             c = conn.cursor()
-            
+
             logger.debug("Creating server_settings table...")
             c.execute('''
                 CREATE TABLE IF NOT EXISTS server_settings (
@@ -228,7 +225,7 @@ def init_db():
                     random_response_chance INTEGER NOT NULL
                 )
             ''')
-            
+
             logger.debug("Creating dm_settings table...")
             c.execute('''
                 CREATE TABLE IF NOT EXISTS dm_settings (
@@ -236,14 +233,14 @@ def init_db():
                     system_prompt TEXT NOT NULL
                 )
             ''')
-            
+
             conn.commit()
             logger.info("Database tables created successfully")
 
             c.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = c.fetchall()
             logger.info(f"Existing tables: {[table[0] for table in tables]}")
-            
+
         except Error as e:
             logger.error(f"Error initializing database: {e}", exc_info=True)
         finally:
@@ -257,7 +254,6 @@ def get_server_settings(server_id):
     if conn is not None:
         try:
             c = conn.cursor()
-            logger.debug("Inserting default values if not exist...")
             c.execute('''
                 INSERT OR IGNORE INTO server_settings (
                     server_id, system_prompt, trigger_words,

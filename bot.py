@@ -11,15 +11,15 @@ logger = logging.getLogger('evil_bot')
 class CustomHelpCommand(commands.DefaultHelpCommand):
     def get_command_signature(self, command):
         return f"{config.COMMAND_PREFIX}{command.qualified_name}"
-        
+
     async def send_bot_help(self, mapping):
         logger.debug("Generating bot help overview")
         ctx = self.context
         bot = ctx.bot
         filtered = await self.filter_commands(bot.commands, sort=True)
         em = discord.Embed(
-            title="Evil Bot Commands", 
-            description="Here are my evil commands! 😈",
+            title="Evil Bot Commands",
+            description="Here are my evil commands!",
             color=config.EMBED_COLOR
         )
         for command in filtered:
@@ -43,32 +43,42 @@ class EvilBot(commands.Bot):
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(
-            command_prefix=config.COMMAND_PREFIX, 
+            command_prefix=config.COMMAND_PREFIX,
             intents=intents,
             help_command=CustomHelpCommand()
         )
         self.setup_commands()
         logger.info("EvilBot initialization complete")
 
-    async def on_ready(self):
-        logger.info(f"{config.BOT_NAME} has risen! Logged in as {self.user}")
+    async def setup_hook(self):
+        logger.info("Running setup_hook: initializing database")
         database.init_db()
 
-    async def on_guild_join(self, guild):
-        logger.info(f"Joined new guild: {guild.id} ({guild.name})")
-        database.get_server_settings(guild.id)
+    async def on_ready(self):
+        logger.info(f"{config.BOT_NAME} has risen! Logged in as {self.user}")
+
+    async def on_command_error(self, ctx, error):
+        if isinstance(error, commands.CommandNotFound):
+            return
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send(embed=utils.error_embed("Missing Argument", str(error)))
+            return
+        if isinstance(error, commands.BadArgument):
+            await ctx.send(embed=utils.error_embed("Invalid Argument", str(error)))
+            return
+        logger.error(f"Unhandled command error in {ctx.command}: {error}", exc_info=error)
+        await ctx.send(embed=utils.error_embed("Error", "An unexpected error occurred."))
 
     def setup_commands(self):
         logger.info("Setting up bot commands")
-        
+
         @self.command(
-            name='set', 
+            name='set',
             brief="Set my evil personality",
             help="Set a new system prompt to change my personality\n\nExample:\n!set You are Evil Bot, an AI assistant with evil tendencies"
         )
         async def set_prompt(ctx, *, prompt=None):
             logger.debug(f"Set command called by {ctx.author.id}")
-            # Handle no prompt case
             if not prompt:
                 logger.debug("No prompt provided, sending help message")
                 await ctx.send(embed=utils.create_help_embed(
@@ -94,14 +104,14 @@ class EvilBot(commands.Bot):
                 logger.info("Prompt updated successfully")
                 await ctx.send(embed=utils.create_embed(
                     "Personality Updated",
-                    "*Evil laugh* I have updated my personality!",
+                    "I have updated my personality!",
                     [{'name': 'New Prompt', 'value': f"```{prompt}```"}]
                 ))
             else:
                 logger.error("Failed to update prompt")
                 await ctx.send(embed=utils.error_embed(
                     "Error",
-                    "Failed to update the system prompt!"
+                    "Failed to update the system prompt."
                 ))
 
         @self.command(
@@ -119,7 +129,7 @@ class EvilBot(commands.Bot):
                 else:
                     logger.debug(f"Getting server prompt for {ctx.guild.id}")
                     prompt = database.get_server_prompt(ctx.guild.id)
-                    
+
                 await ctx.send(embed=utils.create_embed(
                     "Current Prompt",
                     "Here's how I'm currently configured to behave",
@@ -129,7 +139,7 @@ class EvilBot(commands.Bot):
                 logger.error(f"Error getting prompt: {e}", exc_info=True)
                 await ctx.send(embed=utils.error_embed(
                     "Error",
-                    "Failed to retrieve the system prompt!"
+                    "Failed to retrieve the system prompt."
                 ))
 
         @self.command(
@@ -144,13 +154,13 @@ class EvilBot(commands.Bot):
                 if database.set_dm_prompt(ctx.author.id, config.DEFAULT_PERSONA):
                     await ctx.send(embed=utils.create_embed(
                         "Settings Reset",
-                        "Your DM settings have been reset to default! 😈"
+                        "Your DM settings have been reset to default."
                     ))
                 else:
                     logger.error("Failed to reset DM settings")
                     await ctx.send(embed=utils.error_embed(
                         "Error",
-                        "Failed to reset settings!"
+                        "Failed to reset settings."
                     ))
             else:
                 logger.debug(f"Attempting to reset server settings for {ctx.guild.id}")
@@ -163,13 +173,13 @@ class EvilBot(commands.Bot):
                     logger.info("Server settings reset successfully")
                     await ctx.send(embed=utils.create_embed(
                         "Settings Reset",
-                        "All settings have been reset to default values! 😈"
+                        "All settings have been reset to default values."
                     ))
                 else:
                     logger.error("Failed to reset server settings")
                     await ctx.send(embed=utils.error_embed(
                         "Error",
-                        "Failed to reset settings!"
+                        "Failed to reset settings."
                     ))
 
         @self.command(
@@ -183,7 +193,7 @@ class EvilBot(commands.Bot):
                 logger.debug("Trigger command used in DM, sending error")
                 await ctx.send(embed=utils.error_embed(
                     "DM Not Supported",
-                    "Trigger words can only be managed in servers!"
+                    "Trigger words can only be managed in servers."
                 ))
                 return
 
@@ -204,7 +214,7 @@ class EvilBot(commands.Bot):
             settings = database.get_server_settings(ctx.guild.id)
             if not settings:
                 logger.error(f"Failed to get settings for server {ctx.guild.id}")
-                await ctx.send(embed=utils.error_embed("Error", "Failed to get server settings!"))
+                await ctx.send(embed=utils.error_embed("Error", "Failed to get server settings."))
                 return
 
             action = action.lower()
@@ -212,10 +222,10 @@ class EvilBot(commands.Bot):
 
             if action == 'list':
                 logger.debug("Listing trigger words")
-                words_text = "\n".join([f"• {word}" for word in trigger_words]) or "No trigger words set!"
+                words_text = "\n".join([f"• {word}" for word in trigger_words]) or "No trigger words set."
                 await ctx.send(embed=utils.create_embed(
                     "Trigger Words",
-                    "These words summon my evil presence!",
+                    "These words trigger a response.",
                     [{'name': "Current Triggers", 'value': words_text}]
                 ))
 
@@ -224,7 +234,7 @@ class EvilBot(commands.Bot):
                 if word.lower() in [w.lower() for w in trigger_words]:
                     await ctx.send(embed=utils.error_embed(
                         "Duplicate Trigger",
-                        "That trigger word already exists!"
+                        "That trigger word already exists."
                     ))
                     return
 
@@ -239,7 +249,7 @@ class EvilBot(commands.Bot):
                     logger.error("Failed to add trigger word")
                     await ctx.send(embed=utils.error_embed(
                         "Error",
-                        "Failed to add trigger word!"
+                        "Failed to add trigger word."
                     ))
 
             elif action == 'remove' and word:
@@ -248,7 +258,7 @@ class EvilBot(commands.Bot):
                 if word_lower not in [w.lower() for w in trigger_words]:
                     await ctx.send(embed=utils.error_embed(
                         "Unknown Trigger",
-                        "That trigger word doesn't exist!"
+                        "That trigger word doesn't exist."
                     ))
                     return
 
@@ -263,14 +273,14 @@ class EvilBot(commands.Bot):
                     logger.error("Failed to remove trigger word")
                     await ctx.send(embed=utils.error_embed(
                         "Error",
-                        "Failed to remove trigger word!"
+                        "Failed to remove trigger word."
                     ))
 
             else:
                 logger.debug("Invalid trigger command action")
                 await ctx.send(embed=utils.create_help_embed(
                     "Invalid Action",
-                    "Please use a valid action!",
+                    "Please use a valid action.",
                     ["!trigger list", "!trigger add <word>", "!trigger remove <word>"]
                 ))
 
@@ -279,13 +289,13 @@ class EvilBot(commands.Bot):
             brief="Control my random evil appearances",
             help="Manage my random response settings\n\nExamples:\n!random status - Show current settings\n!random on - Enable random responses\n!random off - Disable random responses\n!random chance 20 - Set response chance to 20%"
         )
-        async def random(ctx, action=None, chance: int = None):
+        async def random_cmd(ctx, action=None, chance: int = None):
             logger.debug(f"Random command called by {ctx.author.id} with action: {action}")
             if isinstance(ctx.channel, discord.DMChannel):
                 logger.debug("Random command used in DM, sending error")
                 await ctx.send(embed=utils.error_embed(
                     "DM Not Supported",
-                    "Random responses can only be managed in servers!"
+                    "Random responses can only be managed in servers."
                 ))
                 return
 
@@ -297,7 +307,7 @@ class EvilBot(commands.Bot):
             settings = database.get_server_settings(ctx.guild.id)
             if not settings:
                 logger.error(f"Failed to get settings for server {ctx.guild.id}")
-                await ctx.send(embed=utils.error_embed("Error", "Failed to get server settings!"))
+                await ctx.send(embed=utils.error_embed("Error", "Failed to get server settings."))
                 return
 
             if not action or action.lower() == 'status':
@@ -306,7 +316,7 @@ class EvilBot(commands.Bot):
                     "Random Response Settings",
                     None,
                     [
-                        {'name': 'Status', 'value': "Enabled 😈" if settings['random_responses_enabled'] else "Disabled 🌑", 'inline': True},
+                        {'name': 'Status', 'value': "Enabled" if settings['random_responses_enabled'] else "Disabled", 'inline': True},
                         {'name': 'Chance', 'value': f"{settings['random_response_chance']}%", 'inline': True}
                     ]
                 ))
@@ -320,7 +330,7 @@ class EvilBot(commands.Bot):
                     await ctx.send(embed=utils.create_embed("Random Responses Enabled"))
                 else:
                     logger.error("Failed to enable random responses")
-                    await ctx.send(embed=utils.error_embed("Error", "Failed to enable random responses!"))
+                    await ctx.send(embed=utils.error_embed("Error", "Failed to enable random responses."))
 
             elif action == 'off':
                 logger.debug("Disabling random responses")
@@ -329,14 +339,14 @@ class EvilBot(commands.Bot):
                     await ctx.send(embed=utils.create_embed("Random Responses Disabled"))
                 else:
                     logger.error("Failed to disable random responses")
-                    await ctx.send(embed=utils.error_embed("Error", "Failed to disable random responses!"))
+                    await ctx.send(embed=utils.error_embed("Error", "Failed to disable random responses."))
 
             elif action == 'chance' and isinstance(chance, int):
                 logger.debug(f"Setting random chance to {chance}%")
                 if not 1 <= chance <= 100:
                     await ctx.send(embed=utils.create_help_embed(
                         "Invalid Chance",
-                        "Chance must be between 1 and 100!",
+                        "Chance must be between 1 and 100.",
                         ["!random chance 20"]
                     ))
                     return
@@ -345,11 +355,11 @@ class EvilBot(commands.Bot):
                     logger.info(f"Random chance set to {chance}%")
                     await ctx.send(embed=utils.create_embed(
                         "Random Chance Updated",
-                        f"Random response chance set to {chance}%!"
+                        f"Random response chance set to {chance}%."
                     ))
                 else:
                     logger.error("Failed to update random chance")
-                    await ctx.send(embed=utils.error_embed("Error", "Failed to update random chance!"))
+                    await ctx.send(embed=utils.error_embed("Error", "Failed to update random chance."))
 
             else:
                 logger.debug("Invalid random command action")
@@ -363,82 +373,85 @@ class EvilBot(commands.Bot):
 
     async def on_message(self, message):
         logger.debug(f"Message received - Channel: {message.channel.id}, Author: {message.author.id}")
-            
+
+        # Skip bot messages first
         if message.author.bot:
             logger.debug("Skipping bot message")
             return
 
+        # Handle commands
         if message.content.startswith(self.command_prefix):
             logger.info(f"Processing command: {message.content}")
             await self.process_commands(message)
             return
-                
-        should_respond = False
+
+        # Determine whether to respond and fetch system prompt — one DB hit for servers
         if isinstance(message.channel, discord.DMChannel):
             logger.debug("Message is in DM, should respond")
-            should_respond = True
+            system_prompt = database.get_dm_prompt(message.author.id)
         else:
             logger.debug("Checking if should respond to server message")
-            should_respond = utils.should_respond(message, self.user)
-                
-        if not should_respond:
-            logger.debug("Decided not to respond to message")
-            return
+            settings = database.get_server_settings(message.guild.id)
+            if not settings:
+                logger.warning(f"No settings found for server {message.guild.id}")
+                return
+            if not utils.should_respond(message, self.user, settings):
+                logger.debug("Decided not to respond to message")
+                return
+            system_prompt = settings['system_prompt']
 
         logger.info(f"Preparing response to message: {message.clean_content[:50]}...")
         async with message.channel.typing():
             try:
-                bot_display_name = message.guild.me.display_name if message.guild else self.user.display_name
-                content = message.clean_content.replace(f'@{bot_display_name}', '').strip()
-                
-                if isinstance(message.channel, discord.DMChannel):
-                    logger.debug(f"Getting DM prompt for user {message.author.id}")
-                    system_prompt = database.get_dm_prompt(message.author.id)
-                else:
-                    logger.debug(f"Getting server prompt for guild {message.guild.id}")
-                    system_prompt = database.get_server_prompt(message.guild.id)
-                
+                content = message.clean_content.strip()
+
                 context = [{'role': 'system', 'content': system_prompt}]
-                
-                if message.reference and message.reference.resolved:
-                    logger.debug("Adding replied message to context")
-                    replied_msg = message.reference.resolved
-                    context.append({
-                        'role': 'user' if replied_msg.author != self.user else 'assistant',
-                        'content': replied_msg.clean_content
-                    })
-                
+
+                # Collect history and reverse to oldest-first order
                 logger.debug(f"Getting message history (max {config.MAX_CONTEXT_MESSAGES} messages)")
                 history = []
+                history_ids = set()
                 async for hist_msg in message.channel.history(
                     limit=config.MAX_CONTEXT_MESSAGES,
                     before=message
                 ):
                     if hist_msg.author.bot and hist_msg.author != self.user:
                         continue
+                    history_ids.add(hist_msg.id)
                     history.append({
                         'role': 'user' if hist_msg.author != self.user else 'assistant',
                         'content': hist_msg.clean_content
                     })
-                context.extend(reversed(history))
-                
+                history.reverse()
+                context.extend(history)
+
+                # Add replied message only if it wasn't already captured in history
+                if message.reference and message.reference.resolved:
+                    replied_msg = message.reference.resolved
+                    if replied_msg.id not in history_ids:
+                        logger.debug("Adding replied message to context (outside history window)")
+                        context.append({
+                            'role': 'user' if replied_msg.author != self.user else 'assistant',
+                            'content': replied_msg.clean_content
+                        })
+
+                # Add current message
                 context.append({'role': 'user', 'content': content})
 
                 try:
                     logger.debug(f"Getting response from Ollama using model {config.MODEL_NAME}")
                     response = await utils.get_ollama_response(context, config.MODEL_NAME)
-                    response_content = response['message']['content']
+                    response_content = response.message.content
                     logger.info("Successfully got response from Ollama")
                     logger.debug(f"Response content: {response_content[:100]}...")
-                    response_content = utils.resolve_mentions(response_content, message.guild)
                     await utils.split_and_send_message(message, response_content)
                 except asyncio.TimeoutError:
                     logger.error("Ollama response timed out")
-                    await message.reply("*Evil laugh fades* My dark powers are taking too long! Try again later. 😈")
+                    await message.reply("My response timed out. Try again later.")
                 except Exception as e:
                     logger.error(f"Error getting response from Ollama: {e}", exc_info=True)
-                    await message.reply("*Evil laugh turns into evil cough* Something went wrong with my dark powers! 😈")
+                    await message.reply("Something went wrong while generating a response.")
 
             except Exception as e:
                 logger.error(f"Error in message processing: {e}", exc_info=True)
-                await message.reply("*Evil laugh turns into evil cough* Something went wrong with my dark powers! 😈")
+                await message.reply("Something went wrong while processing your message.")
