@@ -1,3 +1,4 @@
-ollama~=0.4.4
-discord~=2.3.2
-python-dotenv~=1.0.1
+discord.py==2.5.2
+ollama==0.4.7
+aiohttp==3.11.16
+python-dotenv

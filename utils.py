@@ -4,24 +4,21 @@ import functools
 import random
 import discord
 from concurrent.futures import ThreadPoolExecutor
-import database
 import config
 import logging
 
 logger = logging.getLogger('evil_bot')
 
-# create a thread pool for ollama, i just chose 2 threads cause I don't really need more
+# Create a thread pool for ollama calls
 thread_pool = ThreadPoolExecutor(max_workers=2)
 
 def create_embed(title, description=None, fields=None, error=False):
     logger.debug(f"Creating embed - Title: {title}, Error: {error}")
-    emoji = "🌑" if error else "😈"
     em = discord.Embed(
-        title=f"{title} {emoji}",
+        title=title,
         description=description,
-        color=config.EMBED_COLOR
+        color=config.ERROR_EMBED_COLOR if error else config.EMBED_COLOR
     )
-    
     if fields:
         for field in fields:
             em.add_field(
@@ -39,43 +36,23 @@ def no_permission_embed():
     logger.debug("Creating permission denied embed")
     return error_embed(
         "Permission Denied",
-        "You don't have permission to use this command!"
+        "You don't have permission to use this command."
     )
 
 def create_help_embed(command_name, description, examples=None, fields=None):
     logger.debug(f"Creating help embed for command: {command_name}")
     em = create_embed(f"Help: {command_name}", description)
-    
     if examples:
         examples_text = "\n".join([f"• `{ex}`" for ex in examples])
         em.add_field(name="Examples", value=examples_text, inline=False)
-        
     if fields:
         for field in fields:
             em.add_field(**field)
-            
     return em
 
-# This function is just a bool that determines if the bot should respond or fuck off
-def should_respond(message, bot_user):
-    if message.author.bot:
-        logger.debug("Skipping bot message")
-        return False
-
-    # The bot always responds to dms
-    if isinstance(message.channel, discord.DMChannel):
-        logger.debug("Message is in DM, should respond")
-        return True
-
-    # get the server settings
-    settings = database.get_server_settings(message.guild.id)
-    if not settings:
-        logger.warning(f"No settings found for server {message.guild.id}")
-        return False
-
+def should_respond(message, bot_user, settings):
     content_lower = message.content.lower()
 
-    # if any trigger words are in the message, then respond
     triggered = any([
         bot_user in message.mentions,
         any(word in content_lower for word in settings['trigger_words']),
@@ -86,34 +63,17 @@ def should_respond(message, bot_user):
     if triggered:
         logger.debug("Message triggered response")
         return True
-        
-    # Check and roll for random responses
+
     if settings['random_responses_enabled']:
         chance = random.randint(1, 100) <= settings['random_response_chance']
         if chance:
             logger.debug("Random response triggered")
         return chance
-        
-    return False
 
-def resolve_mentions(content, guild):
-    """Replace @name text in LLM output with real Discord mentions (<@id>)."""
-    if not guild:
-        return content
-    # Sort longest names first to avoid partial matches (e.g. "Jo" inside "John")
-    members = sorted(guild.members, key=lambda m: max(len(m.display_name), len(m.name)), reverse=True)
-    for member in members:
-        for name in [member.display_name, member.name]:
-            placeholder = f'@{name}'
-            if placeholder in content:
-                content = content.replace(placeholder, f'<@{member.id}>')
-                break
-    logger.debug(f"Resolved mentions in response")
-    return content
+    return False
 
 async def split_and_send_message(message, content):
     logger.debug(f"Splitting message of length {len(content)}")
-    # This function splits really long messages because discords char limits suck
     if len(content) <= config.MAX_MESSAGE_LENGTH:
         await message.reply(content)
         return
